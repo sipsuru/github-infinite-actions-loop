@@ -1,0 +1,72 @@
+name: Continuous Loop with Artifact
+
+on:
+  workflow_dispatch: # Allow manual or API triggers
+
+jobs:
+  continuous-loop-job:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Download the previous run's artifact (if exists)
+      - name: Download previous artifact
+        id: download_artifact
+        run: |
+          echo "Trying to download previous artifact..."
+          if curl --fail -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -L -o previous_artifact.txt \
+            https://api.github.com/repos/${{ github.repository }}/actions/artifacts; then
+            echo "Previous artifact found."
+          else
+            echo "No previous artifact found."
+            echo "First run or no artifact uploaded."
+          fi
+
+      # Step 2: Print the previous artifact content if available
+      - name: Print previous artifact content
+        run: |
+          if [ -f previous_artifact.txt ]; then
+            echo "Previous artifact content:"
+            cat previous_artifact.txt
+          else
+            echo "No previous artifact to display."
+          fi
+
+      # Step 3: Simulate a wait of 5 minutes and upload an artifact
+      - name: Wait for 5 minutes and upload an artifact
+        run: |
+          echo "Waiting for 5 minutes..."
+          sleep 300
+          echo "5 minutes passed. Uploading artifact..."
+          echo "This artifact was created after 5 minutes at $(date)" > artifact_5.txt
+        continue-on-error: true
+
+      - name: Upload 5 minute artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: artifact_5
+          path: artifact_5.txt
+
+      # Step 4: Simulate a wait of 55 more minutes and upload another artifact
+      - name: Wait for 55 minutes and upload another artifact
+        run: |
+          echo "Waiting for 55 more minutes..."
+          sleep 3300
+          echo "55 minutes passed. Uploading another artifact..."
+          echo "This artifact was created after 55 minutes at $(date)" > artifact_55.txt
+        continue-on-error: true
+
+      - name: Upload 55 minute artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: artifact_55
+          path: artifact_55.txt
+
+      # Step 5: Trigger the next workflow run before the 6-hour limit
+      - name: Trigger next workflow run
+        run: |
+          echo "Triggering the next workflow run..."
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/continuous-loop.yml/dispatches \
+            -d '{"ref":"main"}'
